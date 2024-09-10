@@ -239,11 +239,18 @@ namespace UserManagement2
         public async Task<CreateUpdateContactsDto> UpdateContact(Guid id, CreateUpdateContactsDto input)
         {
             var data = await _ContactRepo.GetAsync(o => o.Id == id);
-            data.City = input.City;
+            data.City = input.City == "string" ? data.City = data.City : data.City = input.City;
+            data.Region = input.Region == "string" ? data.Region = data.Region : data.Region = input.Region;
+            data.PostalCode = input.PostalCode == "string" ? data.PostalCode = data.PostalCode : data.PostalCode = input.PostalCode;
+            data.Phone = input.Phone == "string" ? data.Phone = data.Phone : data.Phone = input.Phone;
+            data.Country = input.Country == "string" ? data.Country = data.Country : data.Country = input.Country;
+
+            /*data.City = input.City;
             data.Region = input.Region;
             data.PostalCode = input.PostalCode;
             data.Country = input.Country;
-            data.Phone = input.Phone;
+            data.Phone = input.Phone;*/
+
             await _ContactRepo.UpdateAsync(data);
             return ObjectMapper.Map<ContactDetails, CreateUpdateContactsDto>(data);
         }
