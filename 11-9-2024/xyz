@@ -1,0 +1,348 @@
+//create delete method if role mapped to any user shouldnt delete role
+//Before deleting contact check is the user is deleted
+//update role 
+
+
+
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Formatters;
+using System;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+using System.Diagnostics.Metrics;
+using System.Linq;
+using System.Linq.Expressions;
+using System.Text;
+using System.Threading.Tasks;
+using System.Xml.Linq;
+using Volo.Abp;
+using Volo.Abp.Application.Services;
+using Volo.Abp.DependencyInjection;
+using Volo.Abp.Domain.Repositories;
+using Volo.Abp.ObjectMapping;
+using static System.Runtime.InteropServices.JavaScript.JSType;
+using static Volo.Abp.Identity.Settings.IdentitySettingNames;
+using static Volo.Abp.UI.Navigation.DefaultMenuNames.Application;
+
+namespace UserManagement2
+{
+    public class UserServices : ApplicationService, ITransientDependency
+    {
+        private readonly IRepository<UserDetails> _UserRepo;
+        private readonly IRepository<ContactDetails> _ContactRepo;
+        private readonly IRepository<RoleDetails> _RoleRepo;
+
+        public UserServices(IRepository<UserDetails> UserRepo,
+            IRepository<ContactDetails> ContactRepo,
+            IRepository<RoleDetails> RoleRepo)
+        {
+            _UserRepo = UserRepo;
+            _ContactRepo = ContactRepo;
+            _RoleRepo = RoleRepo;
+        }
+
+        public async Task<UserDetailsDto> CreateUser(UserDetailsDto input)
+        {
+            UserDetails obj = new UserDetails();
+            var d1 = await _RoleRepo.FirstOrDefaultAsync(x => x.Id == input.Roleid);//checks that the Role id is valid and such role is 
+            var d2 = await _UserRepo.FirstOrDefaultAsync(x => x.Name == input.Name && x.Email == input.Email );//
+            var d3 = await _UserRepo.AnyAsync(x => x.Roleid == input.Roleid);
+
+            if (d1 != null && d2 == null )
+            {
+                obj = await _UserRepo.InsertAsync(ObjectMapper.Map<UserDetailsDto, UserDetails>(input));
+                return ObjectMapper.Map<UserDetails, UserDetailsDto>(obj);
+            }
+
+
+            else
+            {
+
+                throw new UserFriendlyException("Invalid Input");
+            }
+            /*//tried to automatically update id from one table to another  
+
+            *//*var Data = await _RoleRepo.GetListAsync();
+            UserDetails obj = new UserDetails();
+            obj.Roleid = Data.Id;*//*
+
+            
+                UserDetails dat2 = new UserDetails();
+                //var data = await _UserRepo.GetAsync(o => o.Email == input.Email && o.Name == input.Name);
+                var data = await _RoleRepo.FirstOrDefaultAsync(o => o.Id == input.Roleid);
+                var data11 = await _UserRepo.AnyAsync(o => o.Email == input.Email && o.Name==input.Name);
+                if (!data11 && data!=null )
+                {
+                    //if (data.Roleid != input.Roleid) // logic to check if the same user is in two roles
+                    //{
+                        var data1 = ObjectMapper.Map<UserDetailsDto, UserDetails>(input);
+                        dat2 = await _UserRepo.InsertAsync(data1);
+                        var d = ObjectMapper.Map<UserDetails, UserDetailsDto>(dat2);
+
+                        return d;
+                //}
+
+
+            }
+                else
+                {
+
+                    throw new UserFriendlyException("Please provise a Valid Emp id OR The user Already exist");
+                }
+*/
+
+        }
+
+            
+            
+        
+
+        public async Task<RoleDetailsDto> CreateRole(RoleDetailsDto input)
+        {
+            var RoleExists = await _RoleRepo.AnyAsync(e => e.Role == input.Role);
+            if (!RoleExists)
+            {
+                RoleDetails data = new RoleDetails();
+                var data1 = await _RoleRepo.AnyAsync(x => x.Role == input.Role);
+                if (!data1)
+                {
+
+                    data = await _RoleRepo.InsertAsync(ObjectMapper.Map<RoleDetailsDto, RoleDetails>(input));
+
+                }
+
+                return ObjectMapper.Map<RoleDetails, RoleDetailsDto>(data);
+            }
+            else
+            {
+
+                throw new UserFriendlyException("Role Already Present Please Create a New Role");
+            }
+
+
+
+            //initiall method to create an entry in the table
+
+            /*var data1 = ObjectMapper.Map<RoleDetailsDto, RoleDetails>(input);
+            var Data  = await _RoleRepo.GetListAsync();
+
+            var dat2 = await _RoleRepo.InsertAsync(data1);
+            var dat3 = ObjectMapper.Map<RoleDetails, RoleDetailsDto>(dat2);
+            return dat3;*/
+
+
+            // linq method to check wether Role is already present in the Collection
+
+            //var RoleExists = await _RoleRepo.AnyAsync(e => e.Role == input.Role);
+            //if (!RoleExists)
+            //{
+            //    RoleDetails data = new RoleDetails();
+            //    var data1 = await _RoleRepo.AnyAsync(x => x.Role == input.Role);
+            //    if (!data1)
+            //    {
+
+            //        data = await _RoleRepo.InsertAsync(ObjectMapper.Map<RoleDetailsDto, RoleDetails>(input));
+
+            //    }
+
+            //    return data;
+            //}
+            //else
+            //{
+
+            //    throw new UserFriendlyException("Role Already Present Please Create a New Role");
+            //}
+
+
+
+
+            //for loop method to check wether an entry is already present in the table
+
+            //int flag=0;
+            //foreach (var d in data)
+            //{
+
+            //    if (d.Role == name)
+            //    {
+            //        flag = 1;
+            //        break;
+            //    }
+            //    else
+            //    {
+            //        continue;
+            //    }
+            //}
+            //RoleDetails obj = new RoleDetails();
+            //if (flag != 1)
+            //{
+
+            //    obj.Role = name;
+            //    /*var d = await _RoleRepo.InsertAsync(o => o.Role=name);
+            //    return ObjectMapper.Map<UserDetails,UserDetailsDto>(d);*/
+            //    await _RoleRepo.InsertAsync(obj);
+
+
+
+            //}
+
+            //return obj;
+
+
+
+
+        }
+
+        public async Task<ContactDetailsDto> CreateContact(ContactDetailsDto input)
+        {
+            ContactDetails obj = new ContactDetails();
+            var d1 = await _UserRepo.FirstOrDefaultAsync(x => x.Id == input.Empid);
+            var d2 = await _ContactRepo.FirstOrDefaultAsync(x => x.City == input.City
+            && x.Country==input.Country && x.Phone==input.Phone && x.Region==input.Region);
+            var d3 = await _ContactRepo.AnyAsync(x => x.Empid == input.Empid);
+
+            if (d1!=null && d2==null && !d3)
+            {
+                obj = await _ContactRepo.InsertAsync(ObjectMapper.Map<ContactDetailsDto, ContactDetails>(input));
+                return ObjectMapper.Map<ContactDetails, ContactDetailsDto>(obj);
+            }
+            
+
+            else
+            {
+                
+                throw new UserFriendlyException("Invalid Input");
+            }
+
+        }
+                
+
+                
+
+                     
+        
+        
+        public async Task<List<RoleDetails>> GetRole([Required] string letter)
+        {
+            try
+            {
+                var data = await _RoleRepo.GetListAsync();
+                return data.Where(x => x.Role.Contains(letter)).ToList();
+            }
+            catch(Exception e)
+            {
+                throw new UserFriendlyException("No Role Exist in Such Name" + e.Message);
+            }
+        }
+
+        public async Task<List<UserDetails>> GetUser([Required] string letter)
+        {
+            var data = await _UserRepo.GetListAsync();
+            return data.Where(x=>x.Name.Contains(letter)).ToList();
+        }
+
+
+        [HttpGet]
+        public async Task<List<FetchTotalDetails>> FetchUserDetails([Required] string letter)
+        {
+            var userdata = await _UserRepo.GetListAsync();
+            var roledata = await _RoleRepo.GetListAsync();
+            var contactdata = await _ContactRepo.GetListAsync();
+            var data = (from d1 in userdata
+                        join d2 in roledata on d1.Roleid equals d2.Id
+                        join d3 in contactdata on d1.Id equals d3.Empid
+                        select new FetchTotalDetails
+                        {
+
+                            Name = d1.Name,
+                            Email = d1.Email,
+                            CabRequired = d1.CabRequired,
+                            Foodrequired = d1.Foodrequired,
+                            Role = d2.Role,
+                            City = d3.City,
+                            PostalCode = d3.PostalCode,
+                            Region = d3.Region,
+                            Country = d3.Country,
+                            Roleid =d2.Id,
+                            phone=d3.Phone,
+                            Empid=d1.Id,
+                            Contactid=d3.Id
+
+                        }).ToList();
+            //return data.FirstOrDefault(o=>o.Name.StartsWith("N"));<return only one value>
+            return data.Where(o => o.Name.Contains(letter)).ToList();
+            /*foreach (var d in data)
+            {
+                return ObjectMapper.Map<UserDetails,FetchTotalDetails>(d);
+            }*/
+
+
+        }
+
+        public async Task<CreateUpdateUserDto> UpdateUser(Guid id,CreateUpdateUserDto input)
+        {
+            var data = await _UserRepo.GetAsync(o => o.Id == id);
+            data.Name = input.Name != "string" ? data.Name=input.Name : data.Name=data.Name;
+            data.Email = input.Email != "string" ? data.Email = input.Email : data.Email = data.Email;
+
+            //data.Email = input.Email;
+            data.CabRequired = input.CabRequired;
+            data.Foodrequired = input.Foodrequired;
+            await _UserRepo.UpdateAsync(data);
+            return ObjectMapper.Map<UserDetails,CreateUpdateUserDto>(data);
+        }
+        public async Task<CreateUpdateRoleDto> UpdateRole(Guid id, CreateUpdateRoleDto input)
+        {
+            var data = await _RoleRepo.GetAsync(o => o.Id == id);
+            data.Role = input.Role != "string" ? data.Role=input.Role : data.Role=data.Role;
+            
+            await _RoleRepo.UpdateAsync(data);
+            return ObjectMapper.Map<RoleDetails, CreateUpdateRoleDto>(data);
+        }
+
+        public async Task<CreateUpdateContactsDto> UpdateContact(Guid id, CreateUpdateContactsDto input)
+        {
+            var data = await _ContactRepo.GetAsync(o => o.Id == id);
+            data.City = input.City == "string" ? data.City = data.City : data.City = input.City;
+            data.Region = input.Region == "string" ? data.Region = data.Region : data.Region = input.Region;
+            data.PostalCode = input.PostalCode == "string" ? data.PostalCode = data.PostalCode : data.PostalCode = input.PostalCode;
+            data.Phone = input.Phone == "string" ? data.Phone = data.Phone : data.Phone = input.Phone;
+            data.Country = input.Country == "string" ? data.Country = data.Country : data.Country = input.Country;
+
+
+            // updates values but dosent fit in the scenerio where only one field has to updated leaving other fields the same
+
+            /*data.City = input.City;
+            data.Region = input.Region;
+            data.PostalCode = input.PostalCode;
+            data.Country = input.Country;
+            data.Phone = input.Phone;*/
+
+            await _ContactRepo.UpdateAsync(data);
+            return ObjectMapper.Map<ContactDetails, CreateUpdateContactsDto>(data);
+        }
+        public async Task<ContactDetails> GetContactDetails(string phone)
+        {
+            try
+            {
+                var data = await _ContactRepo.GetAsync(o=>o.Phone==phone);
+                
+                return data;
+            }
+            catch (Exception e)
+            {
+                throw new UserFriendlyException("No data Exist in Such Name" + e.Message);
+            }
+        }
+
+        public async Task DeleteUser(Guid id)
+        {
+            var data = await _UserRepo.FirstOrDefaultAsync(x => x.Id==id);
+            await _UserRepo.DeleteAsync(id);
+            await _Userupdate
+        }
+        
+
+
+    }
+    }
+
