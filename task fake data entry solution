@@ -1,0 +1,92 @@
+public async Task<UserDetailsDto> CreateUser(UserDetailsDto input)
+{
+    // Check if the provided RoleId is valid
+    if (input.RoleId == Guid.Empty)
+    {
+        throw new UserFriendlyException("RoleId cannot be the default GUID.");
+    }
+
+    // Verify if the RoleId exists in the RoleDetails collection
+    var roleExists = await _RoleRepo.FirstOrDefaultAsync(r => r.Id == input.RoleId);
+    if (roleExists == null)
+    {
+        throw new UserFriendlyException("Invalid RoleId: The provided RoleId does not exist.");
+    }
+
+    // Validate other required fields (Name, Email, etc.)
+    if (string.IsNullOrWhiteSpace(input.Name) || input.Name == "string")
+    {
+        throw new UserFriendlyException("Improper details: Name is invalid.");
+    }
+
+    if (string.IsNullOrWhiteSpace(input.Email) || input.Email == "string")
+    {
+        throw new UserFriendlyException("Improper details: Email is invalid.");
+    }
+
+    try
+    {
+        // Check if a user with the same name and email already exists
+        var userExists = await _UserRepo.AnyAsync(o => o.Email == input.Email && o.Name == input.Name);
+        if (!userExists)
+        {
+            // Map the DTO to the UserDetails entity
+            var userEntity = ObjectMapper.Map<UserDetailsDto, UserDetails>(input);
+            var createdUser = await _UserRepo.InsertAsync(userEntity);
+
+            // Map the created user entity back to the DTO
+            return ObjectMapper.Map<UserDetails, UserDetailsDto>(createdUser);
+        }
+
+        throw new UserFriendlyException("User already exists with the same name and email.");
+    }
+    catch (Exception ex)
+    {
+        throw new UserFriendlyException("Error creating user: " + ex.Message);
+    }
+}
+
+
+
+public async Task<ContactDetailsDto> CreateContact(ContactDetailsDto input)
+{
+    // Check if the provided EmpId is valid (not a default GUID)
+    if (input.EmpId == Guid.Empty)
+    {
+        throw new UserFriendlyException("EmpId cannot be the default GUID.");
+    }
+
+    // Verify if the EmpId exists in the UserDetails collection
+    var employeeExists = await _UserRepo.FirstOrDefaultAsync(e => e.Id == input.EmpId);
+    if (employeeExists == null)
+    {
+        throw new UserFriendlyException("Invalid EmpId: The provided EmpId does not exist.");
+    }
+
+    // Validate other required fields (Phone, City, etc.)
+    if (string.IsNullOrWhiteSpace(input.Phone) || input.Phone == "string")
+    {
+        throw new UserFriendlyException("Improper details: Phone number is invalid.");
+    }
+
+    try
+    {
+        // Check if a contact with the same phone number already exists
+        var contactExists = await _ContactRepo.AnyAsync(c => c.Phone == input.Phone);
+        if (!contactExists)
+        {
+            // Map the DTO to the ContactDetails entity
+            var contactEntity = ObjectMapper.Map<ContactDetailsDto, ContactDetails>(input);
+            var createdContact = await _ContactRepo.InsertAsync(contactEntity);
+
+            // Map the created contact entity back to the DTO
+            return ObjectMapper.Map<ContactDetails, ContactDetailsDto>(createdContact);
+        }
+
+        throw new UserFriendlyException("Contact already exists with the same phone number.");
+    }
+    catch (Exception ex)
+    {
+        throw new UserFriendlyException("Error creating contact: " + ex.Message);
+    }
+}
