@@ -334,15 +334,83 @@ namespace UserManagement2
             }
         }
 
-        public async Task DeleteUser(Guid id)
-        {
-            var data = await _UserRepo.FirstOrDefaultAsync(x => x.Id==id);
-            await _UserRepo.DeleteAsync(id);
-            await _Userupdate
-        }
         
+        
+        public async Task DeleteRole(Guid roleId)
+        {
+            var isRoleMapped = await _UserRepo.AnyAsync(x => x.Roleid == roleId);
+            
+            if (isRoleMapped)
+            {
+                throw new UserFriendlyException("Role is mapped to users and cannot be deleted.");
+            }
+        
+            var role = await _RoleRepo.GetAsync(roleId);
+            await _RoleRepo.DeleteAsync(role);
+        }
+
+        public async Task DeleteUser(Guid userId)
+        {
+            var user = await _UserRepo.GetAsync(userId);
+            
+            // Delete the user's contact details first
+            var contactDetails = await _ContactRepo.FirstOrDefaultAsync(x => x.Empid == userId);
+            if (contactDetails != null)
+            {
+                await _ContactRepo.DeleteAsync(contactDetails);
+            }
+            
+            // Delete the user
+            await _UserRepo.DeleteAsync(user);
+        }
+        public async Task DeleteContact(Guid contactId)
+        {
+            var contact = await _ContactRepo.GetAsync(contactId);
+            
+            // Check if the user related to the contact still exists
+            var userExists = await _UserRepo.AnyAsync(x => x.Id == contact.Empid);
+            
+            if (userExists)
+            {
+                throw new UserFriendlyException("User is still present, delete the user before deleting contact details.");
+            }
+        
+            // If user is deleted, delete the contact details
+            await _ContactRepo.DeleteAsync(contact);
+        }
+
+
+
 
 
     }
     }
+
+public async Task MoveUserToDeveloper(Guid userId)
+{
+    // Get the user by ID
+    var user = await _UserRepo.GetAsync(userId);
+
+    // Check if the current role is "Intern"
+    var internRole = await _RoleRepo.FirstOrDefaultAsync(r => r.Role == "Intern" && r.Id == user.Roleid);
+    if (internRole == null)
+    {
+        throw new UserFriendlyException("The user is not currently an Intern.");
+    }
+
+    // Check if the "Developer" role exists
+    var developerRole = await _RoleRepo.FirstOrDefaultAsync(r => r.Role == "Developer");
+    if (developerRole == null)
+    {
+        throw new UserFriendlyException("The Developer role does not exist. Please create the Developer role first.");
+    }
+
+    // Update the user's role to Developer
+    user.Roleid = developerRole.Id;
+    await _UserRepo.UpdateAsync(user);
+    
+    // Optionally return the updated user details
+    var updatedUser = ObjectMapper.Map<UserDetails, UserDetailsDto>(user);
+    return updatedUser;
+}
 
