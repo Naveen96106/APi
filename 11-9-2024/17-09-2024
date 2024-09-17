@@ -1,1 +1,121 @@
+ [AbpAuthorize(PatientManagementPermissions.InsuranceVerification.Default)]
+ public async Task<List<InboundListDTO>> GetMYVerificationStatus(List<Guid> ltBranch, Nullable<DateTime> fromDate, Nullable<DateTime> todate, List<Guid?> ltCsr)
+ {
+     try
+     {
+         await _permissionChecker.PermissionCheck(PatientManagementPermissions.InsuranceVerification.Default);
+         List<InboundListDTO> lstVerifications = new();
+         List<PatientPersonal> lstPatients = new();
+         if (ltCsr != null && ltCsr.Count > 0)
+         {
+             lstPatients = _patientPersonalRepository.Where(t => t.csr != null && ltCsr.Contains(t.csr)).ToList();
+         }
+         else
+         {
+             var vRoleData = _roleRepository.Where(x => x.Id == CurrentUser.Id).FirstOrDefault();
 
+             lstPatients = _patientPersonalRepository.Where(t => t.csr == CurrentUser.Id).ToList();
+         }
+
+         List<Guid> lstPatientIds = new();
+         lstPatientIds.AddRange(lstPatients.Select(x => x.Id).ToList());
+         var vVerificationDetails = await _verificationRepository.GetListAsync(i => i.patientId != null && i.patientId != Guid.Empty && lstPatientIds.Contains(i.patientId) && i.isActive == 1 && i.TenantId == CurrentTenant.Id);
+         var vBranch = ltBranch.Count > 0 ? await _organizationUnitRepository.GetListAsync() : await _organizationUnitRepository.GetListAsync(x => ltBranch.Contains(x.Id));
+
+         List<Guid> ltUserIds = new();
+         var vInbound = ltBranch.Count > 0 ? await _inboundRepository.GetListAsync(i => i.branchId != null && ltBranch.Contains(i.branchId.Value) && i.patientId != Guid.Empty && lstPatientIds.Contains(i.patientId.Value) && i.TenantId == CurrentTenant.Id && i.isActive == 1) : await _inboundRepository.GetListAsync(i => i.patientId != null && i.patientId != Guid.Empty && lstPatientIds.Contains(i.patientId.Value) && i.TenantId == CurrentTenant.Id && i.isActive == 1);
+         var vAddress = await _addressRepository.GetListAsync(i => i.patientId != null && i.patientId != Guid.Empty && lstPatientIds.Contains(i.patientId.Value));
+         ltUserIds.AddRange(vVerificationDetails.Where(t => t.CreatorId != null && t.CreatorId != default).Select(t => t.CreatorId.Value).ToList());
+         ltUserIds.AddRange(vVerificationDetails.Where(t => t.LastModifierId != null && t.LastModifierId != default).Select(t => t.LastModifierId.Value).ToList());
+
+         var vUsers = _userRepository.Where(t => ltUserIds.Contains(t.Id)).ToList();
+
+
+
+
+         lstVerifications = (from a in vVerificationDetails
+                             join inb in vInbound on a.patientId equals inb.patientId into c
+                             from ib in c.DefaultIfEmpty()
+                             join ad in vAddress on a.patientId equals ad.patientId into add
+                             from address in add.DefaultIfEmpty()
+                             join b in vBranch on (ib != null ? ib.branchId : Guid.Empty) equals b.Id into bran
+                             from branch in bran.DefaultIfEmpty()
+                             join n in lstPatients on a.patientId equals n.patientId into name
+                             from names in name.DefaultIfEmpty()
+                             where names != null
+                             select new InboundListDTO
+                             {
+                                 patientId = a.patientId,
+                                 locationId = ib != null && ib.branchId != null ? ib.branchId : Guid.Empty,
+                                 locationName = branch != null && branch.organizationUnitName != null ? branch.organizationUnitName : string.Empty,
+                                 name = names != null ? string.Concat(names.lastName, ", ", names.firstName, ((names.middleName != null) ?
+                              (" " + names.middleName) : "")) : null,
+                                 chartNo = names != null && names.chartId != null ? names.chartId : string.Empty,
+                                 stateName = address != null && address.state != null ? address.state : null,
+                                 lockedAt = a != null && a.LockedOn != null ? a.LockedOn : null,
+                                 plan = a.plan.ToString(),
+                                 policyId = (a.policyId),
+                                 PolicyNo = (a != null && a.policy != null ? a.policy : string.Empty),
+                                 PayorCode = (a != null && a.payorCode != null ? a.payorCode : string.Empty),
+                                 PayerName = (a != null && a.payorName != null ? a.payorName : string.Empty),
+                                 verificationStatus = a.verificationStatus.ToString(),
+                                 isExpired = (a.verifiedOn.HasValue && ((DateTime.Now - a.verifiedOn.Value).TotalDays > 30)) ? 1 : 0,
+                                 verificationId = a.Id,
+                                 isLocked = a != null && a.isLocked != null ? a.isLocked : 0,
+                                 LockedStatus = a != null && a.isLocked != null ? (a.isLocked == 0 ? 0 : a.isLocked == 1 && a.LockedBy == CurrentUser.Id ? 1 : 2) : 0,
+                                 LockedById = a != null && a.LockedBy != null ? a.LockedBy : null,
+                                 lockedBy = a != null && a.LockedBy != null ? (_userRepository.Where(i => i.Id == a.LockedBy).Select(u => u.UserName).FirstOrDefault()
+                                   != null ? _userRepository.Where(i => i.Id == a.LockedBy).Select(u => u.UserName).FirstOrDefault() : null) : null,
+                                 isStat = ib != null && ib.isStat != null ? ib.isStat : (a != null && a.isStat != null ? (a.isStat == 1 ? 1 : 0) : 0),
+                                 csrStatus = a.LastModifierId != null ? (vUsers.Where(i => i.Id == a.LastModifierId && i.ExtraProperties != null && i.ExtraProperties.ContainsKey("status")).Select(x => x.ExtraProperties["status"].ToString()).FirstOrDefault() != null ?
+                              vUsers.Where(i => i.Id == a.LastModifierId).Select(x => x.ExtraProperties["status"].ToString()).FirstOrDefault() : null) : (vUsers.Where(i => i.Id == a.CreatorId && i.ExtraProperties != null && i.ExtraProperties.ContainsKey("status")).Select(x => x.ExtraProperties["status"].ToString()).FirstOrDefault() != null
+                              ? vUsers.Where(i => i.Id == a.CreatorId && i.ExtraProperties != null && i.ExtraProperties.ContainsKey("status")).Select(x => x.ExtraProperties["status"].ToString()).FirstOrDefault() : null),
+
+                                 enteredBy = a.LastModifierId != null && _userRepository.Where(i => i.Id == a.LastModifierId).Select(u => u.UserName).FirstOrDefault() != null ?
+                                 _userRepository.Where(i => i.Id == a.LastModifierId).Select(u => u.UserName).FirstOrDefault() : string.Empty,
+                                 enteredOn = a.LastModificationTime != null ? a.LastModificationTime.Value : a.CreationTime,
+                                 modifiedDate = a.LastModificationTime,
+                                 days = ib != null && ib.VerificationMoveDate != null ? CalculateDaysWithoutSundays(ib.VerificationMoveDate, DateTime.Now) : 0,
+                                 StatusOfdocumentFrom = a.WIPId != Guid.Empty ? "Supplies" : "New Setup",
+                                 uploadedDate = ib != null ? ib.uploadedDate : null,
+                                 verifiedOn = a.verifiedOn == null ? null : a.verifiedOn,
+                                 blobname = ib != null && ib.blobName != null ? ib.blobName : null,
+                                 docId = a.docId != null && a.docId != Guid.Empty ? a.docId : null,
+                                 wipId = a.WIPId != Guid.Empty ? a.WIPId : null,
+                                 defaultDocumentNo = ib != null && ib.defaultDocumentId != null ? ib.defaultDocumentId : null,
+                                 isSorted = ib != null && ib.isSorted != null ? ib.isSorted : false,
+                                 Validity = a.verifiedOn != null ? (a.verifiedOn.Value.ToString("dd/MM/yyyy") + " to " + (a.verifiedOn.Value.Date.AddDays(30).ToString("dd/MM/yyyy"))) : string.Empty,
+                                 CreatedBy = a.CreatorId != null && a.CreatorId != Guid.Empty ? _userRepository.Where(x => x.Id == a.CreatorId).Select(y => y.Name).FirstOrDefault() : null,
+
+
+                             }
+                      ).GroupBy(i => new
+                      {
+                          i.plan,
+                          i.patientId
+                      }).Select(i => i.Last()).ToList();
+
+
+         if (lstVerifications.Count > 0 && fromDate != null && todate != null && ltBranch.Count > 0)
+         {
+             lstVerifications = lstVerifications.Where(i => (i.enteredOn.HasValue && i.enteredOn.Value.Date >= fromDate.Value.Date
+                                  && i.enteredOn.Value.Date <= todate.Value.Date) && i.locationId != null && ltBranch.Contains((Guid)i.locationId)).ToList();
+         }
+         else if (lstVerifications.Count > 0 && fromDate == null && todate == null && ltBranch.Count > 0)
+         {
+             lstVerifications = lstVerifications.Where(i => i.locationId != null && ltBranch.Contains((Guid)i.locationId)).ToList();
+         }
+         else if (lstVerifications.Count > 0 && fromDate != null && todate != null && ltBranch.Count == 0)
+         {
+             lstVerifications = lstVerifications.Where(i => (i.enteredOn.HasValue && i.enteredOn.Value.Date >= fromDate.Value.Date
+                                  && i.enteredOn.Value.Date <= todate.Value.Date)).ToList();
+         }
+
+         lstVerifications = lstVerifications.OrderByDescending(t => t.enteredOn).ToList();
+         return lstVerifications;
+     }
+     catch (Exception ex)
+     {
+         throw new UserFriendlyException(ex.Message);
+     }
+ }
