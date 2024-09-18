@@ -119,3 +119,138 @@
          throw new UserFriendlyException(ex.Message);
      }
  }
+//
+// 1. Fetch all branches for the purpose of displaying location names
+var vBranch = await _organizationUnitRepository.GetListAsync();
+
+// 2. Fetch the Inbound records based on whether the filter `ltBranch` is applied or not
+var vInbound = ltBranch.Count > 0 
+    ? await _inboundRepository.GetListAsync(i => i.branchId != null && ltBranch.Contains(i.branchId.Value) && i.patientId != Guid.Empty && lstPatientIds.Contains(i.patientId.Value) && i.TenantId == CurrentTenant.Id && i.isActive == 1) 
+    : await _inboundRepository.GetListAsync(i => i.patientId != null && i.patientId != Guid.Empty && lstPatientIds.Contains(i.patientId.Value) && i.TenantId == CurrentTenant.Id && i.isActive == 1);
+
+// 3. Perform the LINQ join and ensure that locationName is always populated
+lstVerifications = (from a in vVerificationDetails
+                    join inb in vInbound on a.patientId equals inb.patientId into c
+                    from ib in c.DefaultIfEmpty()
+                    join ad in vAddress on a.patientId equals ad.patientId into add
+                    from address in add.DefaultIfEmpty()
+                    join b in vBranch on (ib != null ? ib.branchId : Guid.Empty) equals b.Id into bran
+                    from branch in bran.DefaultIfEmpty()
+                    join n in lstPatients on a.patientId equals n.patientId into name
+                    from names in name.DefaultIfEmpty()
+                    where names != null
+                    select new InboundListDTO
+                    {
+                        patientId = a.patientId,
+                        locationId = ib != null && ib.branchId != null ? ib.branchId : Guid.Empty,
+                        locationName = branch != null && branch.organizationUnitName != null ? branch.organizationUnitName : string.Empty, // Always populate locationName
+                        name = names != null ? string.Concat(names.lastName, ", ", names.firstName, ((names.middleName != null) ? (" " + names.middleName) : "")) : null,
+                        chartNo = names != null && names.chartId != null ? names.chartId : string.Empty,
+                        stateName = address != null && address.state != null ? address.state : null,
+                        lockedAt = a != null && a.LockedOn != null ? a.LockedOn : null,
+                        plan = a.plan.ToString(),
+                        policyId = (a.policyId),
+                        PolicyNo = (a != null && a.policy != null ? a.policy : string.Empty),
+                        PayorCode = (a != null && a.payorCode != null ? a.payorCode : string.Empty),
+                        PayerName = (a != null && a.payorName != null ? a.payorName : string.Empty),
+                        verificationStatus = a.verificationStatus.ToString(),
+                        isExpired = (a.verifiedOn.HasValue && ((DateTime.Now - a.verifiedOn.Value).TotalDays > 30)) ? 1 : 0,
+                        verificationId = a.Id,
+                        isLocked = a != null && a.isLocked != null ? a.isLocked : 0,
+                        LockedStatus = a != null && a.isLocked != null ? (a.isLocked == 0 ? 0 : a.isLocked == 1 && a.LockedBy == CurrentUser.Id ? 1 : 2) : 0,
+                        LockedById = a.LockedBy != null ? a.LockedBy : null,
+                        lockedBy = a.LockedBy != null ? (_userRepository.Where(i => i.Id == a.LockedBy).Select(u => u.UserName).FirstOrDefault()) : null,
+                        isStat = ib != null && ib.isStat != null ? ib.isStat : (a != null && a.isStat != null ? (a.isStat == 1 ? 1 : 0) : 0),
+                        csrStatus = a.LastModifierId != null ? (vUsers.Where(i => i.Id == a.LastModifierId && i.ExtraProperties.ContainsKey("status")).Select(x => x.ExtraProperties["status"].ToString()).FirstOrDefault()) : null,
+                        enteredBy = a.LastModifierId != null && _userRepository.Where(i => i.Id == a.LastModifierId).Select(u => u.UserName).FirstOrDefault() != null ? _userRepository.Where(i => i.Id == a.LastModifierId).Select(u => u.UserName).FirstOrDefault() : string.Empty,
+                        enteredOn = a.LastModificationTime != null ? a.LastModificationTime.Value : a.CreationTime,
+                        modifiedDate = a.LastModificationTime,
+                        days = ib != null && ib.VerificationMoveDate != null ? CalculateDaysWithoutSundays(ib.VerificationMoveDate, DateTime.Now) : 0,
+                        StatusOfdocumentFrom = a.WIPId != Guid.Empty ? "Supplies" : "New Setup",
+                        uploadedDate = ib != null ? ib.uploadedDate : null,
+                        verifiedOn = a.verifiedOn == null ? null : a.verifiedOn,
+                        blobname = ib != null && ib.blobName != null ? ib.blobName : null,
+                        docId = a.docId != null && a.docId != Guid.Empty ? a.docId : null,
+                        wipId = a.WIPId != Guid.Empty ? a.WIPId : null,
+                        defaultDocumentNo = ib != null && ib.defaultDocumentId != null ? ib.defaultDocumentId : null,
+                        isSorted = ib != null && ib.isSorted != null ? ib.isSorted : false,
+                        Validity = a.verifiedOn != null ? (a.verifiedOn.Value.ToString("dd/MM/yyyy") + " to " + (a.verifiedOn.Value.Date.AddDays(30).ToString("dd/MM/yyyy"))) : string.Empty,
+                        CreatedBy = a.CreatorId != null && a.CreatorId != Guid.Empty ? _userRepository.Where(x => x.Id == a.CreatorId).Select(y => y.Name).FirstOrDefault() : null,
+                    }
+                 ).GroupBy(i => new
+                 {
+                     i.plan,
+                     i.patientId
+                 }).Select(i => i.Last()).ToList();
+
+// 4. Filter the verifications based on branch and date range if filters are provided
+if (lstVerifications.Count > 0 && fromDate != null && todate != null && ltBranch.Count > 0)
+{
+    lstVerifications = lstVerifications.Where(i => (i.enteredOn.HasValue && i.enteredOn.Value.Date >= fromDate.Value.Date
+                            && i.enteredOn.Value.Date <= todate.Value.Date) && i.locationId != null && ltBranch.Contains((Guid)i.locationId)).ToList();
+}
+else if (lstVerifications.Count > 0 && fromDate == null && todate == null && ltBranch.Count > 0)
+{
+    lstVerifications = lstVerifications.Where(i => i.locationId != null && ltBranch.Contains((Guid)i.locationId)).ToList();
+}
+else if (lstVerifications.Count > 0 && fromDate != null && todate != null && ltBranch.Count == 0)
+{
+    lstVerifications = lstVerifications.Where(i => (i.enteredOn.HasValue && i.enteredOn.Value.Date >= fromDate.Value.Date
+                            && i.enteredOn.Value.Date <= todate.Value.Date)).ToList();
+}
+
+// 5. Sort and return the final result
+lstVerifications = lstVerifications.OrderByDescending(t => t.enteredOn).ToList();
+return lstVerifications;
+//cheen dapaku dum dum
+var vBranch = await _organizationUnitRepository.GetListAsync();
+
+
+//
+var vBranch = ltBranch.Count > 0 
+    ? await _organizationUnitRepository.GetListAsync(x => ltBranch.Contains(x.Id)) 
+    : await _organizationUnitRepository.GetListAsync();
+reverse logic
+
+//
+joins explanation
+This query is written in LINQ (Language Integrated Query) and involves multiple joins across different collections or tables (vVerificationDetails, vInbound, vAddress, vBranch, lstPatients, etc.). It aims to fetch and shape data into a InboundListDTO object and applies various conditions to handle nullable data, grouping, and formatting. Here's a step-by-step breakdown of what it's doing:
+
+1. From Clause (from a in vVerificationDetails):
+The query starts with the vVerificationDetails collection as a.
+This collection likely contains details about patient verifications.
+2. Joins:
+The query performs multiple left joins (via DefaultIfEmpty()) to bring in related data from other collections:
+vInbound (ib) based on patientId: Fetches inbound details.
+vAddress (address) based on patientId: Fetches address details.
+vBranch (branch) based on branchId: Fetches branch/organization unit details.
+lstPatients (names) based on patientId: Fetches patient-related details (name, chart number, etc.).
+3. Null Handling:
+The query checks if related entities are null using DefaultIfEmpty() for the joins, ensuring that the query handles missing records gracefully by assigning default values.
+For example:
+If ib (inbound data) is null, it assigns a default value of Guid.Empty for branchId.
+If names (patient data) is null, it assigns null to the name field.
+4. Select New Object (InboundListDTO):
+The query then constructs an InboundListDTO object for each result. This object contains many fields, each populated based on the results of the joins and null-handling logic:
+patientId: Taken directly from the vVerificationDetails collection.
+locationId, locationName: Determined from the branch object, with checks to ensure defaults are assigned if null.
+name: Concatenates the patient's lastName, firstName, and optional middleName.
+chartNo, stateName, plan, policyId, PayorCode, etc.: All fetched and formatted from the respective collections.
+5. Custom Fields:
+isExpired: A custom field that checks if the verification is older than 30 days.
+LockedStatus: Determines whether a record is locked, who locked it, and the current user's locking status.
+days: Calls a function CalculateDaysWithoutSundays() to calculate the number of days excluding Sundays between the verification move date and the current date.
+Validity: Formats a string showing the verified date range (30 days).
+6. Grouping (GroupBy):
+The results are grouped by plan and patientId to avoid duplicate records for the same patient and plan.
+After grouping, the query selects the last record from each group, ensuring only the most recent record for each patient/plan is included.
+7. ToList():
+Finally, the results are converted to a list using .ToList().
+Summary
+This LINQ query is designed to:
+
+Fetch verification, address, inbound, branch, and patient data.
+Handle possible null values for joins using DefaultIfEmpty().
+Return detailed, custom-formatted data in an InboundListDTO object.
+Group by plan and patientId to ensure unique records and avoid duplicates.
+Format custom fields such as expiration status, validity dates, and days excluding Sundays.
