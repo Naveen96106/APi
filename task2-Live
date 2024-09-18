@@ -1,0 +1,184 @@
+using Abp.Authorization;
+using DocumentFormat.OpenXml.Office2010.Excel;
+using EdiFabric.Core.Model.Hl7;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+using RCM.PatientManagement.Cache;
+using RCM.PatientManagement.Patient;
+using RCM.PatientManagement.PatientOptimization.DTO;
+using RCM.PatientManagement.PatientOptimization.IService;
+using RCM.PatientManagement.Practice;
+using RCM.PlatformManagement.Permissions;
+using System;
+using System.Linq;
+using System.Threading.Tasks;
+using Volo.Abp;
+using Volo.Abp.Application.Dtos;
+using Volo.Abp.Application.Services;
+using Volo.Abp.Domain.Repositories;
+using static RCM.PlatformManagement.Permissions.PatientManagementPermissions;
+
+namespace RCM.PatientManagement.PatientOptimization
+{
+    [Authorize]
+    public class PatientClinicalService :
+          CrudAppService<
+                PatientClinical, //The Patient entity
+                PatientClinicalDTO, //Used to show Patient
+                Guid, //Primary key of the patient entity
+                PagedAndSortedResultRequestDto, //Used for paging/sorting
+                CreateUpdatePatientClinicalDTO,
+                CreateUpdatePatientClinicalDTO>,
+            IPatientClinicalService
+    {
+
+        private readonly IRepository<PatientClinical, Guid> _clinicalRepository;
+        private readonly IRepository<PatientDataMonitor, Guid> _patientDataMonitorRepository;
+        private readonly IRepository<PracticeManagement, Guid> _practiceManagementRepository;
+        private readonly IScopedCacheService _scopedCacheService;
+        private readonly CustomRolebasePermissionService _permissionChecker;
+        public PatientClinicalService(
+            IRepository<PatientClinical, Guid> clinicalRepository,
+            IRepository<PatientDataMonitor, Guid> patientDataMonitorRepository,
+            IRepository<PracticeManagement, Guid> practiceManagementRepository,
+            CustomRolebasePermissionService permissionChecker,
+                    IScopedCacheService scopedCacheService
+            ) : base(clinicalRepository)
+        {
+            _clinicalRepository = clinicalRepository;
+            _patientDataMonitorRepository = patientDataMonitorRepository;
+            _practiceManagementRepository = practiceManagementRepository;
+            _permissionChecker = permissionChecker;
+            _scopedCacheService = scopedCacheService;
+        }
+
+        // Create a Patient Clinical Details mapped with Patient id
+        [AbpAuthorize(PatientManagementPermissions.PatientClinic.PatientClinical.Create)]
+        public override async Task<PatientClinicalDTO> CreateAsync(CreateUpdatePatientClinicalDTO input)
+        {
+            try
+            {
+                await _permissionChecker.PermissionCheck(PatientManagementPermissions.PatientClinic.PatientClinical.Create);
+                PatientClinicalDTO patientClinical = new PatientClinicalDTO();
+                //var existingPracticeManagement = await _practiceManagementRepository.FirstOrDefaultAsync(i => i.Id == input.referringProviderFacilityId);
+                //if (existingPracticeManagement != null)
+                //{
+                //    input.referringProviderFacility = existingPracticeManagement.practiceName;
+                //     patientClinical = await base.CreateAsync(input);
+                //}
+                //else
+                //{
+                //    throw new UserFriendlyException("Practice Not Found");
+                //}
+                #region PatientDataMonitor
+
+                
+                try
+                {
+                    PatientDataMonitor patientDataDetails = (await _patientDataMonitorRepository.GetListAsync(a => a.patientId == input.patientId)).FirstOrDefault();
+                    if (patientDataDetails != null)
+                    {
+                        //update
+                        patientDataDetails.patientId = input.patientId;
+                        patientDataDetails.description = "CLINICAL";
+                        patientDataDetails.modifiedDate = DateTime.Now;
+                        patientDataDetails.TenantId = CurrentTenant.Id;
+                        var vPatient = await _patientDataMonitorRepository.UpdateAsync(patientDataDetails);
+
+                    }
+                }
+                catch (Exception ex) 
+                {
+                    throw new UserFriendlyException(ex.Message);
+                }
+
+
+                #endregion
+                patientClinical = await base.CreateAsync( input);
+                _scopedCacheService.RemoveScoped($"patientList_{CurrentTenant.Id}");
+                return patientClinical;
+            }
+            catch (Exception ex)
+            {
+                throw new UserFriendlyException(ex.Message);
+            }
+        }
+
+
+        //Update a Patient Clinical Details mapped with patient id
+        [AbpAuthorize(PatientManagementPermissions.PatientClinic.PatientClinical.Edit)]
+        public override async Task<PatientClinicalDTO> UpdateAsync(Guid id, CreateUpdatePatientClinicalDTO input)
+        {
+            try
+            {
+                await _permissionChecker.PermissionCheck(PatientManagementPermissions.PatientClinic.PatientClinical.Edit);
+                PatientClinicalDTO vClinicalDetails = new PatientClinicalDTO();
+
+                // If referringProviderFacilityId set to not  null
+                if (input.referringProviderFacilityId !=  null)
+                {
+                    var existingPracticeManagement = await _practiceManagementRepository.FirstOrDefaultAsync(i => i.Id == input.referringProviderFacilityId);
+                    if (existingPracticeManagement != null)
+                    {
+                        input.referringProviderFacility = existingPracticeManagement.practiceName;
+                    }
+                    else
+                    {
+                        throw new UserFriendlyException("Practice Not Found");
+                    }
+                }
+
+                #region PatientDataMonitor
+                try
+                {
+                    PatientDataMonitor patientDataDetails = (await _patientDataMonitorRepository.GetListAsync(a => a.patientId == input.patientId)).FirstOrDefault();
+                    if (patientDataDetails != null)
+                    {
+                        patientDataDetails.patientId = input.patientId;
+                        patientDataDetails.description = "CLINICAL";
+                        patientDataDetails.modifiedDate = DateTime.Now;
+                        patientDataDetails.TenantId = CurrentTenant.Id;
+                        var vPatient = await _patientDataMonitorRepository.UpdateAsync(patientDataDetails);
+                    }
+                }
+                catch (Exception ex) { throw new UserFriendlyException(ex.Message);
+                }
+
+
+                #endregion
+
+                vClinicalDetails = await base.UpdateAsync(id, input);
+                _scopedCacheService.RemoveScoped($"patientList_{CurrentTenant.Id}");
+                return vClinicalDetails;
+
+
+            }
+            catch (Exception ex)
+            {
+                throw new UserFriendlyException(ex.Message);
+            }
+        }
+
+        //To get Clinical Details by Patient Id
+        [AbpAuthorize(PatientManagementPermissions.PatientClinic.PatientClinical.Default)]
+        public async Task<PatientClinicalDTO> getClinicalDetails(Guid gPatientId)
+        {
+            try
+            {
+                await _permissionChecker.PermissionCheck(PatientManagementPermissions.PatientClinic.PatientClinical.Default);
+                var vClinical = (await _clinicalRepository.GetListAsync(t => t.patientId == gPatientId)).LastOrDefault();
+
+                PatientClinicalDTO clinicalDTO = ObjectMapper.Map<PatientClinical, PatientClinicalDTO>(vClinical);
+
+                return clinicalDTO;
+
+            }
+            catch (Exception ex)
+            {
+
+                throw new UserFriendlyException(ex.Message);
+            }
+        }
+
+    }
+}
