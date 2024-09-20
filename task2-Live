@@ -251,10 +251,40 @@ namespace RCM.PatientManagement.PatientOptimization
             }
             catch (Exception ex)
             {
-
                 throw new UserFriendlyException(ex.Message);
             }
         }
 
     }
 }
+
+
+
+
+//answer
+// Check if referringProviderFacilityId is not null or empty
+if (input.referringProviderFacilityId != null && input.referringProviderFacilityId != Guid.Empty)
+{
+    // Find the provider facility in the practice management repository
+    var existingPracticeManagement = await _practiceManagementRepository.FirstOrDefaultAsync(i => i.Id == input.referringProviderFacilityId);
+    
+    // If the provider facility exists, update the referringProviderFacility field
+    if (existingPracticeManagement != null)
+    {
+        input.referringProviderFacility = existingPracticeManagement.practiceName;
+    }
+    else
+    {
+        // Optionally, handle the case where the provider facility is not found
+        // You could either ignore it or throw an exception, depending on your business logic
+        // throw new UserFriendlyException("Practice Not Found");
+    }
+}
+else
+{
+    // If no referringProviderFacilityId is provided, set the referringProviderFacility to null or handle it accordingly
+    input.referringProviderFacility = null;
+}
+
+// Continue with updating the record regardless of whether referringProviderFacilityId was provided
+vClinicalDetails = await base.UpdateAsync(id, input);
