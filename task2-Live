@@ -145,5 +145,195 @@ public async Task RestoreEntityAsync(Guid id)
     await _myEntityRepository.UpdateAsync(entity);
 }
 ```
+To implement Blob Storage in an ABP project with Swagger integration, you can follow these steps:
 
-With this setup, ABP handles the soft delete functionality for you, ensuring that entities marked as deleted are not returned in queries unless explicitly requested.
+### 1. **Install the Necessary Packages**
+You'll need to install the `Volo.Abp.BlobStoring` package for blob storage functionality. If you're using a specific provider (e.g., Azure Blob Storage, AWS S3, FileSystem, etc.), you’ll also need the corresponding provider package.
+
+For example, for Azure Blob Storage, install:
+```bash
+dotnet add package Volo.Abp.BlobStoring.Azure
+```
+
+For FileSystem Blob Storage (local), install:
+```bash
+dotnet add package Volo.Abp.BlobStoring.FileSystem
+```
+
+For Swagger, ABP already includes Swagger via the `Swashbuckle.AspNetCore` package if you have selected it during project creation.
+
+### 2. **Configure Blob Storage in `appsettings.json`**
+You need to configure the blob storage provider in the `appsettings.json` file. Here's an example for using the **FileSystem** as the provider:
+
+```json
+{
+  "BlobStoring": {
+    "Containers": {
+      "MyFileContainer": {
+        "Provider": "FileSystem",
+        "Configuration": {
+          "BasePath": "D:/BlobStorage/"
+        }
+      }
+    }
+  }
+}
+```
+
+For **Azure Blob Storage**, it would look something like this:
+```json
+{
+  "BlobStoring": {
+    "Containers": {
+      "MyFileContainer": {
+        "Provider": "Azure",
+        "Configuration": {
+          "ConnectionString": "YourAzureStorageConnectionString",
+          "ContainerName": "myblobcontainer"
+        }
+      }
+    }
+  }
+}
+```
+
+### 3. **Configure Blob Storage in `Module` Class**
+You need to configure the Blob Storage provider in your `YourProjectNameModule` class.
+
+For **FileSystem** Blob Storage, you can configure the provider like this:
+
+```csharp
+using Volo.Abp.BlobStoring;
+using Volo.Abp.BlobStoring.FileSystem;
+
+[DependsOn(typeof(AbpBlobStoringModule))]
+public class YourProjectNameModule : AbpModule
+{
+    public override void ConfigureServices(ServiceConfigurationContext context)
+    {
+        Configure<AbpBlobStoringOptions>(options =>
+        {
+            options.Containers.ConfigureDefault(container =>
+            {
+                container.UseFileSystem(fileSystem =>
+                {
+                    fileSystem.BasePath = "D:/BlobStorage/"; // Path where files will be stored
+                });
+            });
+        });
+    }
+}
+```
+
+### 4. **Create Blob AppService**
+Create an application service to handle blob storage, upload, and download actions. This service will interact with the blob container.
+
+```csharp
+using System;
+using System.IO;
+using System.Threading.Tasks;
+using Volo.Abp.Application.Services;
+using Volo.Abp.BlobStoring;
+
+public class BlobAppService : ApplicationService
+{
+    private readonly IBlobContainer<MyFileContainer> _blobContainer;
+
+    public BlobAppService(IBlobContainer<MyFileContainer> blobContainer)
+    {
+        _blobContainer = blobContainer;
+    }
+
+    public async Task UploadFileAsync(Stream fileStream, string fileName)
+    {
+        await _blobContainer.SaveAsync(fileName, fileStream, overrideExisting: true);
+    }
+
+    public async Task<Stream> DownloadFileAsync(string fileName)
+    {
+        return await _blobContainer.GetAsync(fileName);
+    }
+
+    public async Task DeleteFileAsync(string fileName)
+    {
+        await _blobContainer.DeleteAsync(fileName);
+    }
+}
+```
+
+### 5. **Create the Blob Container Class**
+You need to define the blob container class, which will identify the container for storing blobs.
+
+```csharp
+using Volo.Abp.BlobStoring;
+
+[BlobContainerName("MyFileContainer")]
+public class MyFileContainer
+{
+}
+```
+
+### 6. **Add Endpoints for Blob Storage (Swagger Integration)**
+Now, you can expose the blob upload, download, and delete functionality via an API. Swagger will automatically pick up these endpoints.
+
+```csharp
+using Microsoft.AspNetCore.Mvc;
+using System.IO;
+using System.Threading.Tasks;
+
+[Route("api/blob")]
+public class BlobController : AbpController
+{
+    private readonly BlobAppService _blobAppService;
+
+    public BlobController(BlobAppService blobAppService)
+    {
+        _blobAppService = blobAppService;
+    }
+
+    [HttpPost("upload")]
+    public async Task<IActionResult> UploadFile([FromForm] IFormFile file)
+    {
+        if (file == null || file.Length == 0)
+        {
+            return BadRequest("File is empty.");
+        }
+
+        using (var stream = new MemoryStream())
+        {
+            await file.CopyToAsync(stream);
+            stream.Position = 0; // Reset stream position after copying
+
+            await _blobAppService.UploadFileAsync(stream, file.FileName);
+        }
+
+        return Ok(new { message = "File uploaded successfully." });
+    }
+
+    [HttpGet("download/{fileName}")]
+    public async Task<IActionResult> DownloadFile(string fileName)
+    {
+        var fileStream = await _blobAppService.DownloadFileAsync(fileName);
+        if (fileStream == null)
+        {
+            return NotFound();
+        }
+
+        return File(fileStream, "application/octet-stream", fileName);
+    }
+
+    [HttpDelete("delete/{fileName}")]
+    public async Task<IActionResult> DeleteFile(string fileName)
+    {
+        await _blobAppService.DeleteFileAsync(fileName);
+        return Ok(new { message = "File deleted successfully." });
+    }
+}
+```
+
+### 7. **Run the Project and Test Using Swagger**
+Once you've added the necessary services and controller, run your project. You should be able to access Swagger at the `/swagger` endpoint (e.g., `https://localhost:5001/swagger`).
+
+You will see the APIs listed, and you can upload, download,
+With
+this setup, ABP handles the soft delete functionality for you, ensuring that entities marked as deleted are not returned in queries unless explicitly requested.
