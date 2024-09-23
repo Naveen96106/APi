@@ -72,3 +72,78 @@ public override async Task<PatientClinicalDTO> UpdateAsync(Guid id, CreateUpdate
         throw new UserFriendlyException(ex.Message);
     }
 }
+In ABP (Asp.Net Boilerplate), soft deletion is built into the framework. A "soft delete" means that an entity is not physically removed from the database but instead marked as deleted. This is often done by updating a `IsDeleted` field to `true`.
+
+To implement soft delete in your ABP project, follow these steps:
+
+### 1. **Inherit from `ISoftDelete` Interface**
+The `ISoftDelete` interface is used to mark entities as soft-deletable. When this interface is implemented, the framework automatically handles setting the `IsDeleted` property to `true` when the `Delete` method is called.
+
+Example:
+```csharp
+using Volo.Abp.Domain.Entities;
+using Volo.Abp.Domain.Entities.Auditing;
+
+public class MyEntity : FullAuditedEntity<Guid>, ISoftDelete
+{
+    public string Name { get; set; }
+
+    // Other properties...
+}
+```
+
+In this example:
+- The `FullAuditedEntity` already includes soft delete functionality through the `ISoftDelete` interface.
+- The `IsDeleted` property will be automatically managed.
+
+### 2. **Soft Delete on Repository Level**
+If you are using ABP's repositories, soft delete is automatically handled. However, if you want to manually apply soft delete logic, you can use the `DeleteAsync` method on the repository. It will not physically remove the record but will set the `IsDeleted` flag to `true`.
+
+Example:
+```csharp
+public class MyAppService : ApplicationService
+{
+    private readonly IRepository<MyEntity, Guid> _myEntityRepository;
+
+    public MyAppService(IRepository<MyEntity, Guid> myEntityRepository)
+    {
+        _myEntityRepository = myEntityRepository;
+    }
+
+    public async Task SoftDeleteEntityAsync(Guid id)
+    {
+        await _myEntityRepository.DeleteAsync(id);
+    }
+}
+```
+
+### 3. **Filter Out Deleted Entities**
+By default, ABP automatically filters out entities marked as `IsDeleted = true`. If you need to include soft-deleted entities in queries, you can disable the filter using the `GetAllIncludingDeletedAsync` method.
+
+Example:
+```csharp
+public async Task<List<MyEntity>> GetAllIncludingDeletedAsync()
+{
+    using (CurrentTenant.Change(null))
+    {
+        var query = await _myEntityRepository.WithDetailsAsync();
+        return await AsyncExecuter.ToListAsync(query.IgnoreQueryFilters());  // Disables soft delete filter
+    }
+}
+```
+
+### 4. **Restoring Soft-Deleted Entities**
+You can restore a soft-deleted entity by setting its `IsDeleted` flag back to `false`.
+
+Example:
+```csharp
+public async Task RestoreEntityAsync(Guid id)
+{
+    var entity = await _myEntityRepository.GetAsync(id);
+    entity.IsDeleted = false;
+
+    await _myEntityRepository.UpdateAsync(entity);
+}
+```
+
+With this setup, ABP handles the soft delete functionality for you, ensuring that entities marked as deleted are not returned in queries unless explicitly requested.
