@@ -1,0 +1,120 @@
+In ABP Framework, the concept of Soft Delete allows entities to be "deleted" without being permanently removed from the database. Instead of physically deleting a record, a flag (IsDeleted) is set to indicate that the entity is logically deleted. This allows you to recover deleted entities, audit deletions, and prevent them from being visible in queries unless explicitly requested.
+
+Additionally, Fully Audited entities provide automatic tracking of who created, modified, or deleted the entity and when these actions occurred.
+
+Here's how Soft Delete and Fully Audited work in ABP Framework, particularly in the context of an Aggregate Root.
+
+Soft Delete in ABP Framework
+1. ISoftDelete Interface
+The ISoftDelete interface is used to mark an entity as soft-deletable. The entity will not be permanently deleted but marked as deleted, and by default, it will be excluded from queries.
+
+Key Property:
+IsDeleted: This property (type bool) is automatically set to true when the entity is deleted.
+Example:
+csharp
+Copy code
+public class MyEntity : Entity<Guid>, ISoftDelete
+{
+    public bool IsDeleted { get; set; }
+    
+    // Other properties
+}
+2. Query Filters for Soft Deleted Entities
+By default, ABP Framework applies a global query filter that excludes soft-deleted entities from query results.
+
+To include soft-deleted entities in queries, you need to explicitly disable the filter:
+csharp
+Copy code
+var entitiesWithDeleted = await _myEntityRepository
+    .WithDetails()
+    .IgnoreQueryFilters()
+    .ToListAsync();
+To retrieve only the soft-deleted entities, you can filter by the IsDeleted property:
+csharp
+Copy code
+var softDeletedEntities = await _myEntityRepository
+    .Where(e => e.IsDeleted)
+    .ToListAsync();
+Fully Audited in ABP Framework
+The Fully Audited functionality provides full auditing for entity lifecycle events, such as creation, modification, and deletion, along with the user who performed the action.
+
+1. IFullAudited Interface
+The IFullAudited interface includes the following properties:
+
+CreatorId: The ID of the user who created the entity.
+CreationTime: The time when the entity was created.
+LastModifierId: The ID of the user who last modified the entity.
+LastModificationTime: The time when the entity was last modified.
+DeleterId: The ID of the user who deleted the entity.
+DeletionTime: The time when the entity was deleted.
+IsDeleted: Whether the entity is deleted or not.
+Example:
+csharp
+Copy code
+public class MyEntity : FullAuditedAggregateRoot<Guid>
+{
+    // Other properties
+}
+The FullAuditedAggregateRoot class already implements the IFullAudited interface and includes the soft deletion functionality (ISoftDelete).
+
+Aggregate Root with Soft Delete and Fully Audited
+In the ABP Framework, an Aggregate Root is a domain-driven design (DDD) concept that represents the root entity in an aggregate, meaning it's the main entity that controls the lifecycle of other related entities.
+
+Example of Fully Audited and Soft Deleted Aggregate Root:
+csharp
+Copy code
+public class MyAggregateRoot : FullAuditedAggregateRoot<Guid>
+{
+    public string Name { get; set; }
+
+    // Other properties
+}
+Soft Delete Behavior with Aggregate Roots
+When an aggregate root that implements ISoftDelete is deleted, the IsDeleted flag is set to true, but the data remains in the database.
+Any child entities within the aggregate are also soft-deleted based on cascade deletion behavior.
+Best Practices for Using Soft Delete and Fully Audited:
+Automatic Auditing: ABP automatically handles auditing (creation, modification, and deletion) when IFullAudited or ICreationAudited, IModificationAudited interfaces are used. You don't need to manually set auditing properties.
+
+Recovering Soft Deleted Entities: If needed, you can "undelete" an entity by simply setting the IsDeleted flag back to false and saving the entity again.
+
+Disabling Soft Delete Globally or Per Repository:
+
+You can disable the soft delete global filter in specific queries using IgnoreQueryFilters().
+Alternatively, you can disable soft delete globally for certain entities by overriding the default behavior.
+Soft Delete Example with Fully Audited:
+csharp
+Copy code
+public class MyAggregateRoot : FullAuditedAggregateRoot<Guid>
+{
+    public string Name { get; set; }
+    // Other properties
+}
+
+// Repository example
+public class MyAggregateRootAppService : ApplicationService
+{
+    private readonly IRepository<MyAggregateRoot, Guid> _myRepository;
+
+    public MyAggregateRootAppService(IRepository<MyAggregateRoot, Guid> myRepository)
+    {
+        _myRepository = myRepository;
+    }
+
+    public async Task SoftDeleteEntity(Guid id)
+    {
+        var entity = await _myRepository.GetAsync(id);
+        await _myRepository.DeleteAsync(entity);
+    }
+
+    public async Task RestoreDeletedEntity(Guid id)
+    {
+        var entity = await _myRepository.GetAsync(id);
+        entity.IsDeleted = false; // Restore the entity
+        await _myRepository.UpdateAsync(entity);
+    }
+}
+Conclusion:
+Soft Delete (ISoftDelete) allows entities to be logically deleted without actually being removed from the database.
+Fully Audited (IFullAudited) tracks the full lifecycle of an entity, including creation, modification, and deletion.
+In ABP, you can use Soft Delete and Fully Audited features on Aggregate Roots for better data handling and auditing.
+These features work together to enhance data integrity, auditability, and flexibility in managing entities.
