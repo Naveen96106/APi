@@ -1,0 +1,26 @@
+[HttpDelete]
+public async Task DeleteAsync(List<Guid> ids)
+{
+    try
+    {
+        var vNotes = await _notesRepository.GetListAsync(x => ids.Contains(x.Id));
+
+        if (vNotes != null)
+        {
+            foreach (var Notes in vNotes)
+            {
+                await _notesRepository.DeleteAsync(Notes);
+            }
+
+        }
+        else
+        {
+            throw new UserFriendlyException("No Notes Found");
+        }
+    }
+    catch (Exception ex)
+    {
+        throw new UserFriendlyException(ex.Message);
+    }
+
+}
