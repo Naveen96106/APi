@@ -1,5 +1,75 @@
 28SW-0334-1101.0	BUG17572-20240913 The practitioner is not saved if update from clinical tab patient inside view
+To delete a list of GUIDs in the ABP framework, you can implement a bulk delete operation using a service or repository. Here's how you can achieve this:
 
+### Steps:
+1. **Create a Service Method for Bulk Delete:**
+   Implement a service method that accepts a list of GUIDs and deletes the corresponding entities.
+
+2. **Fetch the Entities from the Repository:**
+   Use the repository to retrieve entities that match the GUIDs.
+
+3. **Use the `DeleteAsync` Method:**
+   Once the entities are fetched, you can delete them using `DeleteAsync`.
+
+Here’s an example:
+
+### Example Code:
+
+```csharp
+public class YourEntityAppService : ApplicationService, IYourEntityAppService
+{
+    private readonly IRepository<YourEntity, Guid> _yourEntityRepository;
+
+    public YourEntityAppService(IRepository<YourEntity, Guid> yourEntityRepository)
+    {
+        _yourEntityRepository = yourEntityRepository;
+    }
+
+    public async Task BulkDeleteAsync(List<Guid> ids)
+    {
+        // Fetch entities based on list of ids
+        var entities = await _yourEntityRepository.GetListAsync(x => ids.Contains(x.Id));
+        
+        if (entities.Any())
+        {
+            foreach (var entity in entities)
+            {
+                // Delete each entity
+                await _yourEntityRepository.DeleteAsync(entity);
+            }
+        }
+    }
+}
+```
+
+### Explanation:
+- `IRepository<YourEntity, Guid>` is the repository used to perform CRUD operations on your entity.
+- The method `BulkDeleteAsync` accepts a list of GUIDs, retrieves the corresponding entities using `GetListAsync`, and deletes each entity using `DeleteAsync`.
+
+### Optimizing for Performance:
+If you're working with a large number of entities, you might consider using a single database transaction for bulk deletion to improve performance:
+
+```csharp
+public async Task BulkDeleteAsync(List<Guid> ids)
+{
+    using (var uow = UnitOfWorkManager.Begin())
+    {
+        var entities = await _yourEntityRepository.GetListAsync(x => ids.Contains(x.Id));
+        if (entities.Any())
+        {
+            foreach (var entity in entities)
+            {
+                await _yourEntityRepository.DeleteAsync(entity);
+            }
+        }
+        await uow.CompleteAsync(); // Commit the transaction
+    }
+}
+```
+
+This ensures the bulk delete operation is wrapped within a single transaction for better efficiency and consistency.
+
+Let me know if you'd like help integrating this into your project!
 Fixed Solution
 
 [AbpAuthorize(PatientManagementPermissions.PatientClinic.PatientClinical.Edit)]
