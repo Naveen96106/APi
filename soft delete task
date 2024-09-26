@@ -24,3 +24,34 @@ public async Task DeleteAsync(List<Guid> ids)
     }
 
 }
+
+[HttpDelete]
+public async Task DeleteAsync(List<Guid> ids)
+{
+    try
+    {
+        // Fetch notes with matching IDs
+        var vNotes = await _notesRepository.GetListAsync(x => ids.Contains(x.Id));
+
+        // Identify IDs that were not found in the repository
+        var foundIds = vNotes.Select(note => note.Id).ToList();
+        var notFoundIds = ids.Except(foundIds).ToList();
+
+        // Handle the case when some IDs are not found
+        if (notFoundIds.Any())
+        {
+            // Notify the user about missing IDs
+            throw new UserFriendlyException($"The following IDs were not found: {string.Join(", ", notFoundIds)}");
+        }
+
+        // Proceed to delete the found notes
+        if (vNotes.Any())
+        {
+            await _notesRepository.DeleteManyAsync(vNotes);
+        }
+    }
+    catch (Exception ex)
+    {
+        throw new UserFriendlyException(ex.Message);
+    }
+}
