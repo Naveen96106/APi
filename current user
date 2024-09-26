@@ -1,0 +1,10 @@
+public async Task<PatientNotesDeatils> GetPatientNotesByIdV1(Guid patientID)
+{
+    try
+    {
+        PatientNotesDTO notesobj = new PatientNotesDTO();
+        var data = _notesRepository.GetAsync(x => x.Id == patientID);
+        if (data.TenantId == _currentUser.Id)
+        {
+            notesobj.iscreateduser = true;
+        }
