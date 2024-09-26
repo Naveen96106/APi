@@ -55,3 +55,39 @@ public async Task DeleteAsync(List<Guid> ids)
         throw new UserFriendlyException(ex.Message);
     }
 }
+
+[HttpDelete]
+public async Task SoftDeleteAsync(List<Guid> ids)
+{
+    try
+    {
+        // Fetch notes with matching IDs
+        var vNotes = await _notesRepository.GetListAsync(x => ids.Contains(x.Id));
+
+        // Identify IDs that were not found in the repository
+        var foundIds = vNotes.Select(note => note.Id).ToList();
+        var notFoundIds = ids.Except(foundIds).ToList();
+
+        // Handle the case when some IDs are not found
+        if (notFoundIds.Any())
+        {
+            // Notify the user about missing IDs
+            throw new UserFriendlyException($"The following IDs were not found: {string.Join(", ", notFoundIds)}");
+        }
+
+        // Proceed to soft delete the found notes (mark them as deleted)
+        if (vNotes.Any())
+        {
+            foreach (var note in vNotes)
+            {
+                note.IsDeleted = true;  // Mark the note as "soft deleted"
+                await _notesRepository.UpdateAsync(note);  // Update the record in the repository
+            }
+        }
+    }
+    catch (Exception ex)
+    {
+        throw new UserFriendlyException(ex.Message);
+    }
+}
+
