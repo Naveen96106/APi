@@ -8,6 +8,22 @@ public async Task<PatientNotesDeatils> GetPatientNotesByIdV1(Guid patientID)
         {
             notesobj.iscreateduser = true;
         }
+public void SomeMethod()
+{
+    bool isUserLoggedIn = CurrentUser.IsAuthenticated;
+
+    if (isUserLoggedIn)
+    {
+        // Set a value or execute code if the user is logged in
+        someBooleanVariable = true;
+    }
+    else
+    {
+        // Handle the case when the user is not logged in
+        someBooleanVariable = false;
+    }
+}
+
 
 
 
