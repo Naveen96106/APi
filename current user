@@ -79,7 +79,38 @@
          };
      }
      catch (Exception e)
-     {
-         throw new UserFriendlyException(e.Message);
-     }
- }
+    {
+         throw new UserFriendlyException(e.The object reference error is occurring because you're trying to access the `emailId` field on a `null` object when the patient's address is not found or the email is null. To prevent this, you need to check whether `address` is `null` before trying to access its `emailId` field.
+
+Here’s how you can fix it:
+
+1. Ensure that `address` is not `null` before accessing its properties.
+2. Use the null-coalescing operator (`??`) or conditional access operator (`?.`) to safely access fields that might be null.
+
+Here’s the corrected section of the code:
+
+```csharp
+// Getting Address from Patient Address Repo
+var patientAddress = await _patientAddressRepository.GetListAsync(a => a.patientId == patientId && a.addressType == AddressType.Billing);
+
+address = patientAddress.Where(x => !string.IsNullOrEmpty(x.emailId)).FirstOrDefault();
+
+if (address == null || string.IsNullOrEmpty(address.emailId))
+{
+    address = _patientAddressRepository.Where(a => a.patientId == patientId && a.addressType == AddressType.Delivery)
+               .Where(a => !string.IsNullOrEmpty(a.emailId)) // Ensure emailId is not empty
+               .FirstOrDefault();
+}
+
+// When accessing emailId, use null-coalescing operator
+string email = !string.IsNullOrEmpty(patientDetails.emailId) 
+                ? patientDetails.emailId 
+                : address?.emailId ?? string.Empty;
+```
+
+This way:
+
+- `address?.emailId` ensures you only access `emailId` if `address` is not null.
+- The `?? string.Empty` ensures that if both `emailId` and `address.emailId` are null or empty, you default to an empty string, which avoids the null reference error.
+
+By adding these checks, you’ll avoid any potential null reference exceptions when trying to access `emailId`.
