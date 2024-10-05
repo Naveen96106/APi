@@ -1,1 +1,92 @@
+//claim blob
+public async Task<APIResponseDTO> uploadClaimEOB(IFormFile eobFile, Guid gClaimId)
+{
+    try
+    {
+        APIResponseDTO response = new();
+        if (eobFile != default && gClaimId != default)
+        {
+            string pdfbase64Content = string.Empty;
+            byte[] eobPDFfileContent = null;
+            string sEOBBlobName = string.Empty;
+            string sPDFFileName = string.Empty;
+            //insert the file into blob with its claim Id
+            using (var pdfStream = new MemoryStream())
+            {
+                eobFile.CopyTo(pdfStream);
+                var fileBytes = pdfStream.ToArray();
+                sPDFFileName = eobFile.FileName;
+                //bEOBPDFFileContent = fileBytes;
+                //PdfReader reader = new PdfReader(fileBytes);
+                pdfbase64Content = Convert.ToBase64String(fileBytes);
+                eobPDFfileContent = Convert.FromBase64String(pdfbase64Content);
+
+                sEOBBlobName = string.Concat(GuidGenerator.Create().ToString(), ".pdf");
+                await _blobContainer.SaveAsync(sEOBBlobName, eobPDFfileContent);//Upload into blob
+            }
+
+            response.StatusCode = 200;
+            response.Message = "Uploaded Successfully";
+            response.data = sEOBBlobName;
+            response.fileName = sPDFFileName;
+
+            return response;
+        }
+        else
+        {
+          throw new UserFriendlyException("Invalid Input");
+        }
+    }
+    catch (Exception ex)
+    {
+        throw new UserFriendlyException(ex.Message);
+    }
+}
+
+
+//rxblob
+ public async Task<APIResponseDTO> uploadRx(IFormFile RxFile)
+ {
+     try
+     {
+         APIResponseDTO response = new();
+         if (RxFile != default)
+         {
+             string pdfbase64Content = string.Empty;
+             byte[] RxPDFfileContent = null;
+             string RxBlobName = string.Empty;
+             string sPDFFileName = string.Empty;
+             //insert the file into blob with its claim Id
+             using (var pdfStream = new MemoryStream())
+             {
+                 RxFile.CopyTo(pdfStream);
+                 var fileBytes = pdfStream.ToArray();
+                 sPDFFileName = RxFile.FileName;
+                 //bEOBPDFFileContent = fileBytes;
+                 //PdfReader reader = new PdfReader(fileBytes);
+                 pdfbase64Content = Convert.ToBase64String(fileBytes);
+                 RxPDFfileContent = Convert.FromBase64String(pdfbase64Content);
+
+                 RxBlobName = string.Concat(GuidGenerator.Create().ToString(), ".pdf");
+                 await _blobContainer.SaveAsync(RxBlobName, RxPDFfileContent);//Upload into blob
+             }
+
+             response.StatusCode = 200;
+             response.Message = "Uploaded Successfully";
+             response.data = RxBlobName;
+             response.fileName = sPDFFileName;
+
+             return response;
+         }
+
+         else{
+
+          throw new UserFriendlyException("Invalid Input");
+         }
+     }
+     catch (Exception ex)
+     {
+         throw new UserFriendlyException(ex.Message);
+     }
+ }
 
