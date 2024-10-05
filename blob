@@ -89,4 +89,20 @@ public async Task<APIResponseDTO> uploadClaimEOB(IFormFile eobFile, Guid gClaimI
          throw new UserFriendlyException(ex.Message);
      }
  }
+namespace RCM.OrderManagement.Order.Container
+{
+    
+    [BlobContainerName("RxDocuments")]
+    public class RxDocumentsContainer
+    {
+
+    }
+}
+options.Containers.Configure<RxDocumentsContainer>(container =>
+{
+    container.UseFileSystem(fileSystem =>
+    {
+        fileSystem.BasePath = vConfiguration.GetValue<string>("App:QsecureProducts:TemplatePath");
+    });
+});
 
