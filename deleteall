@@ -1,0 +1,21 @@
+public async  Task DeleteAlldata()
+{
+    try
+    {
+        var vData = _glossaryRepository.GetAsync(x => x.Id != null).ToList();
+        if (vData != null)
+        {
+            foreach (var v in vData)
+            {
+                await _glossaryRepository.DeleteAsync(v);
+            }
+
+        }
+
+
+    }
+    catch (Exception e)
+    {
+        throw new UserFriendlyException(e.Message);
+    }
+}
