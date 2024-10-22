@@ -15,3 +15,20 @@ else
 {
     input.specialInstruction = DateTime.Now.ToString() + vData.specialInstruction;
 }
+
+
+
+if (string.IsNullOrEmpty(vData.specialInstruction))
+{
+    // Create a new instruction if none exists
+    input.specialInstruction = $"{CurrentUser.Name} {DateTime.Now} {input.specialInstruction}";
+}
+else
+{
+    // Extract the existing message without the previous timestamp and user
+    string[] parts = vData.specialInstruction.Split(new[] { ' ' }, 3, StringSplitOptions.RemoveEmptyEntries);
+    string existingMessage = parts.Length > 2 ? parts[2] : string.Empty;
+
+    // Update the instruction with the current date and time, keeping the existing message
+    input.specialInstruction = $"{DateTime.Now} {CurrentUser.Name} {existingMessage} {input.specialInstruction}";
+}t
