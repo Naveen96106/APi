@@ -30,3 +30,34 @@ var vdata = new List<Glossary>
             },
 };
 await _glossaryRepository.InsertManyAsync(vdata, autoSave: true);
+var newGlossaries = new List<Glossary>
+{
+    new Glossary
+    {
+        glossaryCode = "OA 24",
+        description = "New glossary description for OA 24",
+        isActive = 1,
+        TenantId = CurrentTenant.Id,
+    },
+    new Glossary
+    {
+        glossaryCode = "PR 101",
+        description = "New payment description",
+        isActive = 1,
+        TenantId = CurrentTenant.Id,
+    },
+};
+
+// Fetch existing glossary codes from the repository
+var existingGlossaries = await _glossaryRepository.GetAllAsync();
+var existingCodes = existingGlossaries.Select(g => g.glossaryCode).ToHashSet();
+
+// Filter out any new glossaries that already exist
+var glossariesToAdd = newGlossaries
+    .Where(g => !existingCodes.Contains(g.glossaryCode))
+    .ToList();
+
+if (glossariesToAdd.Any())
+{
+    await _glossaryRepository.InsertManyAsync(glossariesToAdd, autoSave: true);
+}
