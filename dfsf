@@ -61,3 +61,52 @@ if (glossariesToAdd.Any())
 {
     await _glossaryRepository.InsertManyAsync(glossariesToAdd, autoSave: true);
 }
+
+
+
+
+var vdata = new List<Glossary>
+{
+    new Glossary
+    {
+        glossaryCode="OA 23",
+        description="The impact of prior payer(s) adjudication including payments and/or adjustments",
+        isActive=1,
+        TenantId=CurrentTenant.Id,
+    },
+    new Glossary
+    {
+        glossaryCode="OA 18",
+        description="Duplicate claim/service",
+        isActive=1,
+        TenantId=CurrentTenant.Id,
+    },
+    new Glossary
+    {
+        glossaryCode="PR 100",
+        description="Payment made to patient/insured/responsible party/employer.",
+        isActive=1,
+        TenantId=CurrentTenant.Id,
+    },
+    new Glossary
+    {
+        glossaryCode="PR 2",
+        description="Coinsurance Amount",
+        isActive=1,
+        TenantId=CurrentTenant.Id,
+    },
+};
+
+foreach (var glossary in vdata)
+{
+    // Check if a glossary with the same glossaryCode already exists
+    var existingGlossary = await _glossaryRepository.FirstOrDefaultAsync(
+        g => g.glossaryCode == glossary.glossaryCode && g.TenantId == glossary.TenantId
+    );
+
+    // Insert only if it doesn't exist
+    if (existingGlossary == null)
+    {
+        await _glossaryRepository.InsertAsync(glossary, autoSave: true);
+    }
+}
